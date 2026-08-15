@@ -16,5 +16,4 @@ jobs:
         with:
           directories: .
           dist-filename: netease-cloud-music-gtk-2.5.4-crates.tar.xz
-          run-cargo-update: false
-
+          run-cargo-update: true
