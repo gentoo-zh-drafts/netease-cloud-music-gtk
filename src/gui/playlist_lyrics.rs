@@ -11,7 +11,7 @@ use log::warn;
 use ncm_api::SongInfo;
 use once_cell::sync::Lazy;
 use once_cell::sync::OnceCell;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::{
@@ -75,25 +75,34 @@ impl PlayListLyricsPage {
         scroll_win.add_controller(scroll_controller);
     }
 
-    pub fn update_playlist(&self, sis: &[SongInfo], current_song: SongInfo, likes: &[bool]) {
+    pub fn update_playlist(&self, sis: &[SongInfo], _current_song: SongInfo, likes: &[bool]) {
         let imp = self.imp();
         imp.playlist.replace(Clone::clone(&sis).to_vec());
         let sender = imp.sender.get().unwrap();
         let songs_list = imp.songs_list.get();
         songs_list.set_sender(sender.clone());
         songs_list.init_new_list(sis, likes);
+    }
 
-        let i: i32 = {
-            let mut i: i32 = 0;
-            match sis.iter().find(|si| {
-                i += 1;
-                si.id == current_song.id
-            }) {
-                Some(_) => i - 1,
-                _ => -1,
-            }
-        };
-        self.switch_row(i);
+    // 在页面挂载到窗口后调用：订阅 current-song-changed 并刷新当前曲目指示符。
+    pub fn bind_current_song(&self, window: &crate::window::NeteaseCloudMusicGtk4Window) {
+        let imp = self.imp();
+        if !imp.subscribed.get() {
+            imp.subscribed.set(true);
+            let songs_list = imp.songs_list.get().downgrade();
+            window.connect_local(
+                "current-song-changed",
+                false,
+                move |args| {
+                    let id = args[1].get::<u64>().unwrap_or(0);
+                    if let Some(songs_list) = songs_list.upgrade() {
+                        songs_list.update_playing_song(id);
+                    }
+                    None
+                },
+            );
+        }
+        imp.songs_list.get().update_playing_song(window.current_song_id());
     }
 
     pub fn update_lyrics_text(&self, text: &str) {
@@ -180,9 +189,6 @@ impl PlayListLyricsPage {
         mark_to_return
     }
 
-    pub fn switch_row(&self, index: i32) {
-        self.imp().songs_list.mark_new_row_playing(index, false);
-    }
 }
 
 impl Default for PlayListLyricsPage {
@@ -216,6 +222,7 @@ mod imp {
         pub playlist: Rc<RefCell<Vec<SongInfo>>>,
         pub sender: OnceCell<Sender<Action>>,
         pub current_lyrics: Arc<RwLock<Vec<(u64, String)>>>,
+        pub subscribed: Cell<bool>,
     }
 
     #[glib::object_subclass]

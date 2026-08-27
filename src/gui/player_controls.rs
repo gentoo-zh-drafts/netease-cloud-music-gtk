@@ -580,12 +580,6 @@ impl PlayerControls {
             }
             if let Ok(mut playlist) = self.imp().playlist.lock() {
                 playlist.remove_song(song);
-                let sender = self.imp().sender.get().unwrap().clone();
-                if playlist.len() >= 1 {
-                    sender
-                        .send_blocking(Action::UpdatePlayListStatus(playlist.get_position()))
-                        .unwrap();
-                }
             }
             self.save_playlist();
         }
@@ -1124,9 +1118,6 @@ mod imp {
                     sender
                         .send_blocking(Action::Play(song_info.to_owned()))
                         .unwrap();
-                    sender
-                        .send_blocking(Action::UpdatePlayListStatus(playlist.get_position()))
-                        .unwrap();
                     return;
                 }
             }
@@ -1220,9 +1211,6 @@ mod imp {
                     let song_info = song_info.to_owned();
                     sender
                         .send_blocking(Action::Play(song_info.to_owned()))
-                        .unwrap();
-                    sender
-                        .send_blocking(Action::UpdatePlayListStatus(playlist.get_position()))
                         .unwrap();
                     return;
                 }

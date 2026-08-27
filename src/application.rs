@@ -86,9 +86,7 @@ async fn favorite_playlist_id(ncmapi: &NcmClient, uid: u64) -> Result<u64, &'sta
 // 列表循环模式追加失败/为空时：从头播放列表第一首
 async fn playlist_restart(window: &NeteaseCloudMusicGtk4Window, sender: &Sender<Action>) {
     if let Some(first) = window.playlist_first_restart() {
-        let index = window.playlist_position();
         sender.send(Action::Play(first.to_owned())).await.unwrap();
-        sender.send(Action::UpdatePlayListStatus(index)).await.unwrap();
     }
 }
 
@@ -159,7 +157,6 @@ pub enum Action {
     // playlist
     ToPlayListLyricsPage(Vec<SongInfo>, SongInfo),
     UpdateLyrics(SongInfo, u64),
-    UpdatePlayListStatus(usize),
     RemoveFromPlayList(SongInfo),
 
     // page routing
@@ -1157,9 +1154,7 @@ impl NeteaseCloudMusicGtk4Application {
                             if let Some(song) = appended.first() {
                                 // 追加成功：自动播放追加的第一首并同步播放位置
                                 window.sync_playlist_position(song.id);
-                                let index = window.playlist_position();
                                 sender.send(Action::Play(song.to_owned())).await.unwrap();
-                                sender.send(Action::UpdatePlayListStatus(index)).await.unwrap();
                             } else if ext_mode == HeartbeatExtendMode::ListLoop {
                                 // 追加为空（全部重复）：列表循环恢复从头播放
                                 playlist_restart(&window, &sender).await;
@@ -1451,9 +1446,6 @@ impl NeteaseCloudMusicGtk4Application {
                     // 更新歌词高亮位置
                     window.update_lyrics_timestamp(time);
                 });
-            }
-            Action::UpdatePlayListStatus(index) => {
-                window.update_playlist_status(index);
             }
             Action::RemoveFromPlayList(song_info) => {
                 MAINCONTEXT.spawn_local_with_priority(Priority::DEFAULT_IDLE, async move {

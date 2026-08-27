@@ -122,16 +122,18 @@ impl SongListView {
         self.imp().listbox.get()
     }
 
-    pub fn mark_new_row_playing(&self, index: i32, do_active: bool) {
+    // 根据当前播放歌曲 id 更新指示符，使 ▶️ 始终指向正在播放的曲目。
+    pub fn update_playing_song(&self, song_id: u64) {
         let listbox = self.list_box();
-        if let Some(row) = listbox.row_at_index(index) {
+        let mut child = listbox.first_child();
+        while let Some(row) = child {
             let row = row.downcast::<SonglistRow>().unwrap();
-            if do_active {
-                row.emit_activate();
-            } else {
-                row.switch_image(true);
-            }
-            listbox.emit_by_name_with_values("row-activated", &[row.to_value()]);
+            let visible = row
+                .get_song_info()
+                .map(|si| si.id == song_id)
+                .unwrap_or(false);
+            row.switch_image(visible);
+            child = row.next_sibling();
         }
     }
 

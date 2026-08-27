@@ -11,6 +11,7 @@ use gettextrs::gettext;
 use gio::{Settings, SimpleAction};
 use glib::{
     ParamSpec, ParamSpecEnum, ParamSpecObject, ParamSpecUInt64, Value, clone, source::Priority,
+    subclass::Signal,
 };
 use gtk::{
     CompositeTemplate,
@@ -89,6 +90,7 @@ mod imp {
         search_type: Cell<SearchType>,
         toast: RefCell<Option<Toast>>,
         user_info: RefCell<UserInfo>,
+        pub current_song_id: Cell<u64>,
     }
 
     impl NeteaseCloudMusicGtk4Window {
@@ -197,6 +199,15 @@ mod imp {
                 _ => unimplemented!(),
             }
         }
+
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+                vec![Signal::builder("current-song-changed")
+                    .param_types([u64::static_type()])
+                    .build()]
+            });
+            SIGNALS.as_ref()
+        }
     }
     impl WidgetImpl for NeteaseCloudMusicGtk4Window {}
     impl WindowImpl for NeteaseCloudMusicGtk4Window {}
@@ -235,6 +246,10 @@ impl NeteaseCloudMusicGtk4Window {
 
     pub fn settings(&self) -> &Settings {
         self.imp().settings.get().expect("Could not get settings.")
+    }
+
+    pub fn current_song_id(&self) -> u64 {
+        self.imp().current_song_id.get()
     }
 
     fn setup_action(&self) {
@@ -546,10 +561,13 @@ impl NeteaseCloudMusicGtk4Window {
     }
 
     pub fn play(&self, song_info: SongInfo) {
+        let id = song_info.id;
         let player_controls = self.imp().player_controls.get();
-        player_controls.set_property("like", self.imp().user_like_song_contains(&song_info.id));
+        player_controls.set_property("like", self.imp().user_like_song_contains(&id));
         player_controls.play(song_info);
         self.show_player_bar();
+        self.imp().current_song_id.set(id);
+        self.emit_by_name::<()>("current-song-changed", &[&id]);
     }
 
     pub fn init_page_data(&self) {
@@ -775,6 +793,8 @@ impl NeteaseCloudMusicGtk4Window {
         page.init_page(&sis, si, &self.get_song_likes(&sis));
 
         self.page_new(page, &gettext("Play List&Lyrics"), "Play List&Lyrics");
+        // 页面已挂载到窗口，订阅 current-song-changed 以同步 ▶️ 指示符。
+        page.bind_current_song(self);
     }
 
     // 更新歌词内容，不调整位置
@@ -797,14 +817,6 @@ impl NeteaseCloudMusicGtk4Window {
         let page = imp.playlist_lyrics_page.get().unwrap();
         if self.page_cur_playlist_lyrics_page() {
             page.update_lyrics_highlight(time);
-        }
-    }
-
-    pub fn update_playlist_status(&self, index: usize) {
-        let imp = self.imp();
-        let page = imp.playlist_lyrics_page.get().unwrap();
-        if self.page_cur_playlist_lyrics_page() {
-            page.switch_row(index as i32);
         }
     }
 

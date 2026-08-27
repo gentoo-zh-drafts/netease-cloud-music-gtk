@@ -13,7 +13,7 @@ use gettextrs::gettext;
 use gtk::{glib, prelude::*, subclass::prelude::*, CompositeTemplate, *};
 use ncm_api::{SongInfo, TopList};
 use once_cell::sync::OnceCell;
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::{Cell, RefCell}, rc::Rc};
 
 glib::wrapper! {
     pub struct TopListView(ObjectSubclass<imp::TopListView>)
@@ -91,6 +91,27 @@ impl TopListView {
         songs_list.set_sender(sender.clone());
         songs_list.init_new_list(sis, likes);
         songs_list.set_property("no-act-remove", true);
+
+        // 订阅窗口当前播放歌曲变化，使 ▶️ 指示符跟随播放进度。
+        if let Some(window) = self.root().and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
+        {
+            if !imp.subscribed.get() {
+                imp.subscribed.set(true);
+                let songs_list = songs_list.downgrade();
+                window.connect_local(
+                    "current-song-changed",
+                    false,
+                    move |args| {
+                        let id = args[1].get::<u64>().unwrap_or(0);
+                        if let Some(songs_list) = songs_list.upgrade() {
+                            songs_list.update_playing_song(id);
+                        }
+                        None
+                    },
+                );
+            }
+            songs_list.update_playing_song(window.current_song_id());
+        }
     }
 }
 
@@ -118,6 +139,8 @@ mod imp {
         pub playlist: Rc<RefCell<Vec<SongInfo>>>,
         pub data: OnceCell<Vec<TopList>>,
         pub sender: OnceCell<Sender<Action>>,
+
+        pub subscribed: Cell<bool>,
     }
 
     #[glib::object_subclass]

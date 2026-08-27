@@ -141,6 +141,27 @@ impl SonglistPage {
         let sender = imp.sender.get().unwrap();
         songs_list.set_sender(sender.clone());
         songs_list.init_new_list(sis, likes);
+
+        // 订阅窗口当前播放歌曲变化，使 ▶️ 指示符跟随播放进度。
+        if let Some(window) = self.root().and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
+        {
+            if !imp.subscribed.get() {
+                imp.subscribed.set(true);
+                let songs_list = songs_list.downgrade();
+                window.connect_local(
+                    "current-song-changed",
+                    false,
+                    move |args| {
+                        let id = args[1].get::<u64>().unwrap_or(0);
+                        if let Some(songs_list) = songs_list.upgrade() {
+                            songs_list.update_playing_song(id);
+                        }
+                        None
+                    },
+                );
+            }
+            songs_list.update_playing_song(window.current_song_id());
+        }
     }
 }
 
@@ -178,6 +199,7 @@ mod imp {
 
         pub sender: OnceCell<Sender<Action>>,
 
+        pub subscribed: Cell<bool>,
         like: Cell<bool>,
     }
 
