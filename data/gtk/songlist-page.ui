@@ -126,7 +126,20 @@
             </object>
         </child>
         <child>
-            <object class="SongListView" id="songs_list"></object>
+            <object class="GtkOverlay">
+                <child>
+                    <object class="SongListView" id="songs_list"></object>
+                </child>
+                <child type="overlay">
+                    <object class="GtkSpinner" id="loading_spinner">
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="width-request">50</property>
+                        <property name="height-request">50</property>
+                        <property name="spinning">False</property>
+                    </object>
+                </child>
+            </object>
         </child>
     </template>
 </interface>

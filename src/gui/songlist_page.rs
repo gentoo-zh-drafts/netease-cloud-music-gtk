@@ -80,6 +80,8 @@ impl SonglistPage {
         self.set_property("like", false);
 
         imp.songs_list.clear_list();
+        // 页面创建时为加载态，列表填充完成后由 init_songlist 关闭
+        self.set_property("loading", true);
     }
 
     pub fn init_songlist(&self, detail: &SongListDetail, likes: &[bool]) {
@@ -176,6 +178,8 @@ impl SonglistPage {
             }
             songs_list.update_playing_song(window.current_song_id());
         }
+        // 列表已填充，关闭加载动画
+        self.set_property("loading", false);
     }
 
     // 依据当前排序状态重渲染电台节目列表（最早优先时反转缓存的列表）
@@ -231,6 +235,10 @@ mod imp {
         #[template_child(id = "sort_button")]
         pub sort_button: TemplateChild<ToggleButton>,
 
+        // 列表加载时的居中旋转指示器
+        #[template_child(id = "loading_spinner")]
+        pub loading_spinner: TemplateChild<Spinner>,
+
         pub songlist: Rc<RefCell<Option<SongList>>>,
         pub page_type: Rc<RefCell<Option<DiscoverSubPage>>>,
 
@@ -238,6 +246,7 @@ mod imp {
 
         pub subscribed: Cell<bool>,
         like: Cell<bool>,
+        loading: Cell<bool>,
 
         // 电台节目排序状态：缓存已加载的节目列表与当前顺序
         // （false=最新优先，true=最早优先），以便本地反转而无需重新请求接口
@@ -361,11 +370,18 @@ mod imp {
                 })
                 .sync_create()
                 .build();
+
+            // 加载状态由 set_property("loading") 直接驱动 Spinner 的旋转显示，
+            // 不依赖属性绑定，避免手动 set_property 未触发 notify 导致动画不刷新。
         }
 
         fn properties() -> &'static [ParamSpec] {
-            static PROPERTIES: Lazy<Vec<ParamSpec>> =
-                Lazy::new(|| vec![ParamSpecBoolean::builder("like").readwrite().build()]);
+            static PROPERTIES: Lazy<Vec<ParamSpec>> = Lazy::new(|| {
+                vec![
+                    ParamSpecBoolean::builder("like").readwrite().build(),
+                    ParamSpecBoolean::builder("loading").readwrite().build(),
+                ]
+            });
             PROPERTIES.as_ref()
         }
 
@@ -375,6 +391,11 @@ mod imp {
                     let like = value.get().expect("The value needs to be of type `bool`.");
                     self.like.replace(like);
                 }
+                "loading" => {
+                    let loading = value.get().expect("The value needs to be of type `bool`.");
+                    self.loading.replace(loading);
+                    self.loading_spinner.get().set_spinning(loading);
+                }
                 _ => unimplemented!(),
             }
         }
@@ -382,6 +403,7 @@ mod imp {
         fn property(&self, _id: usize, pspec: &ParamSpec) -> Value {
             match pspec.name() {
                 "like" => self.like.get().to_value(),
+                "loading" => self.loading.get().to_value(),
                 _ => unimplemented!(),
             }
         }

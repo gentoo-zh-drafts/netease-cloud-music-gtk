@@ -5,9 +5,9 @@
 //
 use async_channel::Sender;
 use glib::{
-    clone, ParamSpec, ParamSpecBoolean, ParamSpecEnum, ParamSpecInt, ParamSpecString, Value,
+    ParamSpec, ParamSpecBoolean, ParamSpecEnum, ParamSpecInt, ParamSpecString, Value, clone,
 };
-pub(crate) use gtk::{glib, prelude::*, subclass::prelude::*, CompositeTemplate, *};
+pub(crate) use gtk::{CompositeTemplate, glib, prelude::*, subclass::prelude::*, *};
 use ncm_api::SongInfo;
 use once_cell::sync::{Lazy, OnceCell};
 
@@ -68,9 +68,23 @@ impl SearchSongPage {
         self.set_property("search-type", search_type);
 
         imp.songs_list.get().clear_list();
+
+        // 仅每日推荐/收藏单曲/云盘音乐三类页面需要显示加载动画
+        let show_loading = matches!(
+            search_type,
+            SearchType::DailyRec | SearchType::Heartbeat | SearchType::CloudDisk
+        );
+        self.set_property("loading", show_loading);
     }
 
     pub fn update_songs(&self, sis: &[SongInfo], likes: &[bool]) {
+        // 三类页面在首屏填充完成后隐藏加载动画
+        if matches!(
+            self.property::<SearchType>("search-type"),
+            SearchType::DailyRec | SearchType::Heartbeat | SearchType::CloudDisk
+        ) {
+            self.set_property("loading", false);
+        }
         self.set_property("update", true);
         let offset = self.property::<i32>("offset") + sis.len() as i32;
         self.set_property("offset", offset);
@@ -111,7 +125,10 @@ mod imp {
 
         #[template_child(id = "songs_list")]
         pub songs_list: TemplateChild<SongListView>,
+        #[template_child(id = "loading_spinner")]
+        pub loading_spinner: TemplateChild<Spinner>,
         update: Cell<bool>,
+        loading: Cell<bool>,
         offset: Cell<i32>,
         keyword: RefCell<String>,
         search_type: Cell<SearchType>,
@@ -141,6 +158,9 @@ mod imp {
             self.parent_constructed();
             let obj = self.obj();
 
+            // 加载状态由 set_property("loading") 直接驱动 Spinner 的旋转显示，
+            // 不依赖属性绑定，避免手动 set_property 未触发 notify 导致动画不刷新。
+
             self.songs_list
                 .imp()
                 .scroll_win
@@ -157,6 +177,7 @@ mod imp {
             static PROPERTIES: Lazy<Vec<ParamSpec>> = Lazy::new(|| {
                 vec![
                     ParamSpecBoolean::builder("update").build(),
+                    ParamSpecBoolean::builder("loading").build(),
                     ParamSpecInt::builder("offset").build(),
                     ParamSpecString::builder("keyword").build(),
                     ParamSpecEnum::builder::<SearchType>("search-type")
@@ -172,6 +193,11 @@ mod imp {
                 "update" => {
                     let update = value.get().expect("The value needs to be of type `bool`.");
                     self.update.replace(update);
+                }
+                "loading" => {
+                    let loading = value.get().expect("The value needs to be of type `bool`.");
+                    self.loading.replace(loading);
+                    self.loading_spinner.get().set_spinning(loading);
                 }
                 "offset" => {
                     let offset = value.get().expect("The value needs to be of type `i32`.");
@@ -194,6 +220,7 @@ mod imp {
         fn property(&self, _id: usize, pspec: &ParamSpec) -> Value {
             match pspec.name() {
                 "update" => self.update.get().to_value(),
+                "loading" => self.loading.get().to_value(),
                 "offset" => self.offset.get().to_value(),
                 "keyword" => self.keyword.borrow().to_value(),
                 "search-type" => self.search_type.get().to_value(),

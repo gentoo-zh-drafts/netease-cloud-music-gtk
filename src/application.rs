@@ -833,7 +833,9 @@ impl NeteaseCloudMusicGtk4Application {
                         song_info.album_id,
                     ))
                     .unwrap();
-                sender.send_blocking(Action::UpdateTrayPlaying(true)).unwrap();
+                sender
+                    .send_blocking(Action::UpdateTrayPlaying(true))
+                    .unwrap();
 
                 window.play(song_info);
             }
@@ -859,6 +861,9 @@ impl NeteaseCloudMusicGtk4Application {
                         }
                         Err(err) => {
                             error!("获取歌单详情失败: {:?}", err);
+                            if let Some(page) = page.upgrade() {
+                                page.set_property("loading", false);
+                            }
                             sender
                                 .send(Action::AddToast(gettext(
                                     "Failed to get song list details!",
@@ -932,6 +937,9 @@ impl NeteaseCloudMusicGtk4Application {
                         }
                         Err(err) => {
                             error!("获取专辑详情失败: {:?}", err);
+                            if let Some(page) = page.upgrade() {
+                                page.set_property("loading", false);
+                            }
                             sender
                                 .send(Action::AddToast(gettext("Failed to get album details!")))
                                 .await
@@ -957,6 +965,9 @@ impl NeteaseCloudMusicGtk4Application {
                         }
                         Err(err) => {
                             error!("获取电台详情失败: {:?}", err);
+                            if let Some(page) = page.upgrade() {
+                                page.set_property("loading", false);
+                            }
                             sender
                                 .send(Action::AddToast(gettext("Failed to get radio details!")))
                                 .await
@@ -1089,10 +1100,7 @@ impl NeteaseCloudMusicGtk4Application {
                     let playlist_id = match favorite_playlist_id(&ncmapi, uid).await {
                         Ok(pid) => pid,
                         Err(toast) => {
-                            sender
-                                .send(Action::AddToast(gettext(toast)))
-                                .await
-                                .unwrap();
+                            sender.send(Action::AddToast(gettext(toast))).await.unwrap();
                             return;
                         }
                     };
@@ -1139,14 +1147,15 @@ impl NeteaseCloudMusicGtk4Application {
                     let playlist_id = match favorite_playlist_id(&ncmapi, uid).await {
                         Ok(pid) => pid,
                         Err(toast) => {
-                            sender
-                                .send(Action::AddToast(gettext(toast)))
-                                .await
-                                .unwrap();
+                            sender.send(Action::AddToast(gettext(toast))).await.unwrap();
                             return;
                         }
                     };
-                    match ncmapi.client.playmode_intelligence_list(si.id, playlist_id).await {
+                    match ncmapi
+                        .client
+                        .playmode_intelligence_list(si.id, playlist_id)
+                        .await
+                    {
                         Ok(pl) => {
                             debug!("追加心动歌曲：{:?}", pl);
                             let mut new_list = pl;
@@ -1269,6 +1278,9 @@ impl NeteaseCloudMusicGtk4Application {
                         }
                         Err(err) => {
                             error!("{:?}", err);
+                            if let Some(p) = page.upgrade() {
+                                p.set_property("loading", false);
+                            }
                             sender
                                 .send(Action::AddToast(gettext(
                                     "Request for interface failed, please try again!",
@@ -1300,6 +1312,9 @@ impl NeteaseCloudMusicGtk4Application {
                                     }
                                     Err(err) => {
                                         error!("{:?}", err);
+                                        if let Some(p) = page.upgrade() {
+                                            p.set_property("loading", false);
+                                        }
                                         sender
                                             .send(Action::AddToast(gettext(
                                                 "Failed to get song list details!",
@@ -1312,6 +1327,9 @@ impl NeteaseCloudMusicGtk4Application {
                         }
                         Err(err) => {
                             error!("{:?}", err);
+                            if let Some(p) = page.upgrade() {
+                                p.set_property("loading", false);
+                            }
                             sender
                                 .send(Action::AddToast(gettext(
                                     "Request for interface failed, please try again!",
@@ -1339,6 +1357,9 @@ impl NeteaseCloudMusicGtk4Application {
                         }
                         Err(err) => {
                             error!("{:?}", err);
+                            if let Some(p) = page.upgrade() {
+                                p.set_property("loading", false);
+                            }
                             sender
                                 .send(Action::AddToast(gettext(
                                     "Request for interface failed, please try again!",
