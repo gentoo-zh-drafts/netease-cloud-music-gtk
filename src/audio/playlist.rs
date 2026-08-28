@@ -118,6 +118,18 @@ impl PlayList {
                         shuffle = data.list.clone();
                         fastrand::shuffle(&mut shuffle);
                     }
+                    // 校验 shuffle 与 list 集合一致性，不一致则以 list 为基准重建，避免残留损坏数据
+                    if loops == LoopsState::Shuffle && !data.list.is_empty() {
+                        let same_set = shuffle.len() == data.list.len()
+                            && shuffle
+                                .iter()
+                                .all(|s| data.list.iter().any(|l| l.id == s.id));
+                        if !same_set {
+                            let mut list = data.list.clone();
+                            fastrand::shuffle(&mut list);
+                            shuffle = list;
+                        }
+                    }
                     // 约束 position 在有效范围内
                     let max_pos = if loops == LoopsState::Shuffle {
                         shuffle.len().saturating_sub(1)
@@ -331,17 +343,20 @@ impl PlayList {
 
     pub fn set_loops(&mut self, loops: LoopsState) {
         if let LoopsState::Shuffle = loops {
-            if self.play_state {
-                let first = self.list.remove(self.position);
-                let mut list = self.list.clone();
-                fastrand::shuffle(&mut list);
-                list.insert(0, first);
-                self.shuffle = list;
-            } else {
-                let mut list = self.list.clone();
-                fastrand::shuffle(&mut list);
-                self.shuffle = list;
+            // 当前播放歌曲（按当前模式正确定位），不会越界
+            let current = self.current_song().cloned();
+            let mut list = self.list.clone();
+            // 按歌曲 id 查找真实索引再移除，避免用 shuffle 索引误索引 list 导致越界
+            if let Some(song) = &current {
+                if let Some(idx) = list.iter().position(|s| s.id == song.id) {
+                    list.remove(idx);
+                }
             }
+            fastrand::shuffle(&mut list);
+            if let Some(song) = current {
+                list.insert(0, song);
+            }
+            self.shuffle = list;
             self.position = 0;
         }
         self.loops = loops;
@@ -456,7 +471,7 @@ impl PlayList {
             }
             LoopsState::Playlist => {
                 let position = if self.position == 0 {
-                    self.list.len() - 1
+                    self.list.len().saturating_sub(1)
                 } else {
                     self.position - 1
                 };
