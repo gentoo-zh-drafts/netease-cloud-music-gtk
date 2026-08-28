@@ -7,7 +7,7 @@ use async_channel::Sender;
 use chrono::{TimeZone, Utc};
 use gettextrs::gettext;
 use glib::{ParamSpec, ParamSpecBoolean, Value};
-pub(crate) use gtk::{glib, prelude::*, subclass::prelude::*, CompositeTemplate, *};
+pub(crate) use gtk::{CompositeTemplate, glib, prelude::*, subclass::prelude::*, *};
 use ncm_api::SongList;
 use once_cell::sync::{Lazy, OnceCell};
 
@@ -121,6 +121,8 @@ impl SonglistPage {
                 imp.songs_list.set_property("no-act-album", true);
                 imp.songs_list.set_property("no-act-like", true);
                 imp.songs_list.set_property("no-act-remove", true);
+                // 电台页不支持收藏，隐藏收藏按钮
+                imp.like_button.get().set_visible(false);
                 imp.page_type.replace(Some(DiscoverSubPage::Radio));
                 imp.num_label.set_label(&gettext_f(
                     "Total {num} issues",
@@ -135,32 +137,63 @@ impl SonglistPage {
                         si.album = "未知".to_string();
                     }
                 }
+                // 缓存电台节目列表，供点击排序按钮时本地反转重渲染
+                imp.radio_songs.replace(sis.clone());
+                imp.radio_asc.set(false);
+                // 默认按“最新优先”展示，并据此设置按钮提示
+                let sort_btn = imp.sort_button.get();
+                sort_btn.set_active(false);
+                sort_btn.set_tooltip_text(Some(&gettext("Switch to oldest first")));
             }
         }
 
         let sender = imp.sender.get().unwrap();
         songs_list.set_sender(sender.clone());
-        songs_list.init_new_list(sis, likes);
+        if matches!(detail, SongListDetail::Radio(_)) {
+            self.render_radio();
+        } else {
+            songs_list.init_new_list(sis, likes);
+        }
+        imp.sort_button
+            .get()
+            .set_visible(matches!(detail, SongListDetail::Radio(_)));
 
         // 订阅窗口当前播放歌曲变化，使 ▶️ 指示符跟随播放进度。
-        if let Some(window) = self.root().and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
+        if let Some(window) = self
+            .root()
+            .and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
         {
             if !imp.subscribed.get() {
                 imp.subscribed.set(true);
                 let songs_list = songs_list.downgrade();
-                window.connect_local(
-                    "current-song-changed",
-                    false,
-                    move |args| {
-                        let id = args[1].get::<u64>().unwrap_or(0);
-                        if let Some(songs_list) = songs_list.upgrade() {
-                            songs_list.update_playing_song(id);
-                        }
-                        None
-                    },
-                );
+                window.connect_local("current-song-changed", false, move |args| {
+                    let id = args[1].get::<u64>().unwrap_or(0);
+                    if let Some(songs_list) = songs_list.upgrade() {
+                        songs_list.update_playing_song(id);
+                    }
+                    None
+                });
             }
             songs_list.update_playing_song(window.current_song_id());
+        }
+    }
+
+    // 依据当前排序状态重渲染电台节目列表（最早优先时反转缓存的列表）
+    fn render_radio(&self) {
+        let imp = self.imp();
+        let mut sis = imp.radio_songs.borrow().clone();
+        if imp.radio_asc.get() {
+            sis.reverse();
+        }
+        // 电台行不显示收藏状态，用等长的占位数组保证行数正确即可
+        let likes = vec![false; sis.len()];
+        imp.songs_list.clear_list();
+        imp.songs_list.init_new_list(&sis, &likes);
+        if let Some(window) = self
+            .root()
+            .and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
+        {
+            imp.songs_list.update_playing_song(window.current_song_id());
         }
     }
 }
@@ -194,6 +227,10 @@ mod imp {
         #[template_child(id = "songs_list")]
         pub songs_list: TemplateChild<SongListView>,
 
+        // 用于切换电台节目排序的圆形切换按钮
+        #[template_child(id = "sort_button")]
+        pub sort_button: TemplateChild<ToggleButton>,
+
         pub songlist: Rc<RefCell<Option<SongList>>>,
         pub page_type: Rc<RefCell<Option<DiscoverSubPage>>>,
 
@@ -201,6 +238,11 @@ mod imp {
 
         pub subscribed: Cell<bool>,
         like: Cell<bool>,
+
+        // 电台节目排序状态：缓存已加载的节目列表与当前顺序
+        // （false=最新优先，true=最早优先），以便本地反转而无需重新请求接口
+        pub radio_songs: Rc<RefCell<Vec<ncm_api::SongInfo>>>,
+        pub radio_asc: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -234,6 +276,23 @@ mod imp {
                     .send_blocking(Action::AddToast(gettext("This is an empty song list！")))
                     .unwrap();
             }
+        }
+
+        #[template_callback]
+        fn sort_button_clicked_cb(&self) {
+            // 翻转排序状态：false=最新优先，true=最早优先
+            let asc = !self.radio_asc.get();
+            self.radio_asc.set(asc);
+            let btn = self.sort_button.get();
+            // 更新按钮提示，使其始终描述“下一次点击”的行为
+            if asc {
+                btn.set_tooltip_text(Some(&gettext("Switch to newest first")));
+            } else {
+                btn.set_tooltip_text(Some(&gettext("Switch to oldest first")));
+            }
+            // active 状态经由 constructed() 中的绑定驱动排序图标切换
+            btn.set_active(asc);
+            self.obj().render_radio();
         }
 
         #[template_callback]
@@ -283,6 +342,24 @@ mod imp {
                         .to_string(),
                     )
                 })
+                .build();
+
+            // 根据按钮 active 状态自动切换升/降序图标：
+            // active => 最早优先（升序图标），inactive => 最新优先（降序图标）
+            self.sort_button
+                .get()
+                .bind_property("active", &self.sort_button.get(), "icon_name")
+                .transform_to(|_, active: bool| {
+                    Some(
+                        (if active {
+                            "view-sort-ascending-symbolic"
+                        } else {
+                            "view-sort-descending-symbolic"
+                        })
+                        .to_string(),
+                    )
+                })
+                .sync_create()
                 .build();
         }
 

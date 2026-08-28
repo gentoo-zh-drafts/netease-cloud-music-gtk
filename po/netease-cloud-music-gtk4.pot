@@ -579,3 +579,11 @@ msgstr ""
 #: src/gui/system_tray.rs
 msgid "Next"
 msgstr ""
+
+#: src/gui/songlist_page.rs
+msgid "Switch to oldest first"
+msgstr ""
+
+#: src/gui/songlist_page.rs
+msgid "Switch to newest first"
+msgstr ""

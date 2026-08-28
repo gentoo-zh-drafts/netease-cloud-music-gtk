@@ -581,10 +581,17 @@ msgstr "播放"
 #: src/gui/system_tray.rs
 msgid "Previous"
 msgstr "上一首"
-
 #: src/gui/system_tray.rs
 msgid "Next"
 msgstr "下一首"
+
+#: src/gui/songlist_page.rs
+msgid "Switch to oldest first"
+msgstr "切换为最早优先"
+
+#: src/gui/songlist_page.rs
+msgid "Switch to newest first"
+msgstr "切换为最新优先"
 
 #~ msgid "{} songs, {} favs"
 #~ msgstr "{} 首歌曲，{} 收藏"
