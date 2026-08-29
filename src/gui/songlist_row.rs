@@ -3,14 +3,11 @@
 // Copyright (C) 2022 gmg137 <gmg137 AT live.com>
 // Distributed under terms of the GPL-3.0-or-later license.
 //
-use gtk::prelude::*;
-use gtk::subclass::prelude::*;
-use gtk::{glib, CompositeTemplate, *};
-
-use crate::application::Action;
+use crate::{application::Action, utils::setup_ellipsis_tooltip};
 use async_channel::Sender;
 use gettextrs::gettext;
 use glib::{ParamSpec, ParamSpecBoolean, SendWeakRef, Value};
+use gtk::{CompositeTemplate, glib, prelude::*, subclass::prelude::*, *};
 use ncm_api::{SongInfo, SongList};
 use once_cell::sync::{Lazy, OnceCell};
 use std::{
@@ -32,13 +29,13 @@ impl SonglistRow {
             imp.sender.set(sender).unwrap();
         }
         obj.set_from_song_info(si);
+        obj.setup_tooltips();
         obj
     }
 
     pub fn set_from_song_info(&self, si: &SongInfo) {
         self.imp().song_info.replace(Some(si.clone()));
 
-        self.set_tooltip_text(Some(&si.name));
         self.set_name(&si.name);
         self.set_singer(&si.singer);
         self.set_album(&si.album);
@@ -94,6 +91,17 @@ impl SonglistRow {
         let imp = self.imp();
         let label = format!("{:0>2}:{:0>2}", duration / 1000 / 60, duration / 1000 % 60);
         imp.duration_label.set_label(&label);
+    }
+
+    fn setup_tooltips(&self) {
+        let imp = self.imp();
+        for label in [
+            imp.title_label.get(),
+            imp.artist_label.get(),
+            imp.album_label.get(),
+        ] {
+            setup_ellipsis_tooltip(&label);
+        }
     }
 }
 

@@ -33,6 +33,7 @@ glib::wrapper! {
 impl SonglistPage {
     pub fn new() -> Self {
         let songlist_page: SonglistPage = glib::Object::new();
+        setup_ellipsis_tooltip(&songlist_page.imp().title_label.get());
         songlist_page
     }
 

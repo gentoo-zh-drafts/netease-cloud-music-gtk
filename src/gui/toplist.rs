@@ -7,13 +7,16 @@ use crate::{
     application::Action, gui::songlist_view::SongListView, model::ImageDownloadImpl, path::CACHE,
     utils::*,
 };
-use adw::{prelude::ActionRowExt, subclass::prelude::BinImpl, ActionRow};
+use adw::{ActionRow, prelude::ActionRowExt, subclass::prelude::BinImpl};
 use async_channel::Sender;
 use gettextrs::gettext;
-use gtk::{glib, prelude::*, subclass::prelude::*, CompositeTemplate, *};
+use gtk::{CompositeTemplate, glib, prelude::*, subclass::prelude::*, *};
 use ncm_api::{SongInfo, TopList};
 use once_cell::sync::OnceCell;
-use std::{cell::{Cell, RefCell}, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 glib::wrapper! {
     pub struct TopListView(ObjectSubclass<imp::TopListView>)
@@ -93,22 +96,20 @@ impl TopListView {
         songs_list.set_property("no-act-remove", true);
 
         // 订阅窗口当前播放歌曲变化，使 ▶️ 指示符跟随播放进度。
-        if let Some(window) = self.root().and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
+        if let Some(window) = self
+            .root()
+            .and_downcast::<crate::window::NeteaseCloudMusicGtk4Window>()
         {
             if !imp.subscribed.get() {
                 imp.subscribed.set(true);
                 let songs_list = songs_list.downgrade();
-                window.connect_local(
-                    "current-song-changed",
-                    false,
-                    move |args| {
-                        let id = args[1].get::<u64>().unwrap_or(0);
-                        if let Some(songs_list) = songs_list.upgrade() {
-                            songs_list.update_playing_song(id);
-                        }
-                        None
-                    },
-                );
+                window.connect_local("current-song-changed", false, move |args| {
+                    let id = args[1].get::<u64>().unwrap_or(0);
+                    if let Some(songs_list) = songs_list.upgrade() {
+                        songs_list.update_playing_song(id);
+                    }
+                    None
+                });
             }
             songs_list.update_playing_song(window.current_song_id());
         }
@@ -208,6 +209,7 @@ mod imp {
     impl ObjectImpl for TopListView {
         fn constructed(&self) {
             self.parent_constructed();
+            setup_ellipsis_tooltip(&self.title_label.get());
         }
     }
     impl WidgetImpl for TopListView {}

@@ -32,7 +32,9 @@ glib::wrapper! {
 
 impl SearchSongPage {
     pub fn new() -> Self {
-        glib::Object::new()
+        let page: SearchSongPage = glib::Object::new();
+        setup_ellipsis_tooltip(&page.imp().title_label.get());
+        page
     }
 
     pub fn set_sender(&self, sender: Sender<Action>) {

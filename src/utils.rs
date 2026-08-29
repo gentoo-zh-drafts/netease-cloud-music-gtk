@@ -1,6 +1,6 @@
 use gettextrs::gettext;
-use glib::{timeout_add_seconds, SourceId};
-use gtk::glib;
+use glib::{SourceId, timeout_add_seconds};
+use gtk::{Label, glib, prelude::*};
 use ncm_api::{SongCopyright, SongInfo, SongQualityState};
 use std::sync::{Arc, Mutex};
 
@@ -80,4 +80,19 @@ pub fn empty_song_info() -> SongInfo {
         quality: SongQualityState::default(),
         copyright: SongCopyright::Unknown,
     }
+}
+
+/// 仅当 `Label` 文本被省略号截断时，悬停才显示完整文本。
+///
+/// 用于列表行或页面顶部标题等可能被 `ellipsize` 截断的标签。
+pub fn setup_ellipsis_tooltip(label: &Label) {
+    label.set_has_tooltip(true);
+    label.connect_query_tooltip(|label, _x, _y, _kb, tooltip| {
+        if label.layout().is_ellipsized() {
+            tooltip.set_text(Some(label.label().as_str()));
+            true
+        } else {
+            false
+        }
+    });
 }
