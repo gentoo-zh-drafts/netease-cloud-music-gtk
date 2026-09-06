@@ -1046,7 +1046,7 @@ impl NeteaseCloudMusicGtk4Application {
             Action::LikeSong(id, is_like, callback) => {
                 let sender = imp.sender.clone();
                 MAINCONTEXT.spawn_local_with_priority(Priority::DEFAULT_IDLE, async move {
-                    if ncmapi.client.like(is_like, id).await {
+                    if ncmapi.client.like_v1(is_like, id).await {
                         debug!("收藏/取消收藏歌曲: {:?}", id);
                         window.set_like_song(id, is_like);
                         sender
